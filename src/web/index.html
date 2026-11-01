@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aparelho Auditivo</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--mut:#667085;--line:#d9dde5;--r:#d0312d;--l:#1f5fd1;--acc:#0f7b6c}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--fg);padding:12px}
+main{max-width:760px;margin:auto}
+h1{font-size:20px;margin:4px 0 12px}
+h2{font-size:16px;margin:0 0 10px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.mut{color:var(--mut);font-size:13px}
+button{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+button.warn{color:var(--r)}
+input,select{font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px;width:100%}
+label{display:block;font-size:13px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:520px}
+td,th{border-bottom:1px solid var(--line);padding:4px;text-align:center;font-size:13px}
+td input{width:56px;padding:4px}
+th.r,td.r{color:var(--r)} th.l,td.l{color:var(--l)}
+svg{width:100%;height:auto;display:block}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;background:#eef1f5;font-size:13px}
+.bar{height:8px;background:#eef1f5;border-radius:4px;overflow:hidden}
+.bar>div{height:100%;background:var(--acc);width:0}
+.note{font-size:13px;background:#fff8e6;border:1px solid #f0d58c;padding:8px;border-radius:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>Aparelho auditivo — configuração</h1>
+
+<section>
+  <div class="row">
+    <span class="pill" id="batt">bateria —</span>
+    <span class="pill" id="dsp">DSP —</span>
+    <span class="pill" id="mic">mic —</span>
+    <button id="muteBtn">Mudo</button>
+  </div>
+</section>
+
+<section>
+  <h2>Audiograma</h2>
+  <svg id="agSvg" viewBox="0 0 520 330"></svg>
+  <p class="mut">O vermelho = ouvido direito · X azul = ouvido esquerdo · ↓ = sem resposta no nível máximo</p>
+  <div class="tbl"><table id="agTbl"></table></div>
+  <p class="mut">Pode editar (ex.: copiar um exame feito por fonoaudiólogo). Vazio = não testado; "NR" = sem resposta.</p>
+  <button id="agSave">Salvar audiograma</button>
+</section>
+
+<section>
+  <h2>Audiometria</h2>
+  <p class="mut">Use fones fechados em ambiente silencioso. Aperte o botão do encoder sempre que ouvir o tom, mesmo bem fraco. Direito primeiro, depois esquerdo.</p>
+  <div class="row">
+    <button class="pri" id="audStart">Iniciar audiometria</button>
+    <button id="audCal">Calibração biológica</button>
+    <button class="warn" id="audStop">Parar</button>
+  </div>
+  <div id="audStatus" class="mut" style="margin-top:10px"></div>
+  <div class="bar" style="margin-top:6px"><div id="audBar"></div></div>
+</section>
+
+<section>
+  <h2>Prescrição (NAL-R) e ajuste fino</h2>
+  <svg id="gainSvg" viewBox="0 0 520 260"></svg>
+  <p class="mut">Pontos = ganho alvo · linha = resposta real do equalizador</p>
+  <div class="tbl"><table id="ftTbl"></table></div>
+  <button id="ftSave">Aplicar ajuste fino</button>
+</section>
+
+<section>
+  <h2>Configurações</h2>
+  <div class="grid" id="setGrid"></div>
+  <div class="row" style="margin-top:10px"><button class="pri" id="setSave">Salvar</button></div>
+</section>
+
+<section>
+  <h2>Tom de teste e calibração</h2>
+  <div class="grid">
+    <div><label>Ouvido</label><select id="tEar"><option value="right">Direito</option><option value="left">Esquerdo</option></select></div>
+    <div><label>Frequência</label><select id="tBand"></select></div>
+    <div><label>Nível (dB HL)</label><input id="tHl" type="number" value="40" step="5"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="tPlay">Tocar 1 s</button>
+    <button id="tRef">Tom de referência 1 kHz a −20 dBFS</button>
+  </div>
+  <p class="mut">Referência: meça o SPL no fone (app de decibelímetro com acoplador) e informe em "SPL de saída a 0 dBFS" o valor medido + 20.</p>
+  <div class="tbl"><table id="calTbl"></table></div>
+  <div class="row" style="margin-top:8px"><button class="warn" id="calReset">Zerar calibração biológica</button></div>
+</section>
+
+<section>
+  <div class="note">Este equipamento não é um dispositivo médico e não substitui avaliação audiológica profissional. Comece sempre com volume baixo.</div>
+  <div class="row" style="margin-top:10px"><button id="restart">Sair do modo configuração (reiniciar)</button></div>
+</section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const EARS = ["right", "left"];
+const EAR_NAME = {right: "Direito", left: "Esquerdo"};
+let S = null;
+
+const SETTINGS = [
+  ["volume_db", "Volume (dB)", 1],
+  ["volume_max_db", "Volume máximo (dB)", 1],
+  ["max_gain_db", "Ganho máx. por banda (dB)", 1],
+  ["mpo_spl", "Saída máxima MPO (dB SPL)", 1],
+  ["wdrc_knee_spl", "Joelho da compressão (dB SPL)", 1],
+  ["wdrc_ratio", "Razão de compressão", 0.1],
+  ["mic_spl_at_0dbfs", "SPL do mic a 0 dBFS", 1],
+  ["out_spl_at_0dbfs", "SPL de saída a 0 dBFS", 1],
+  ["max_test_hl", "Nível máx. do teste (dB HL)", 5],
+];
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  if (!r.ok) { alert(await r.text()); throw new Error(path); }
+  return r.json();
+}
+
+const fLabel = f => f >= 1000 ? (f / 1000) + "k" : String(f);
+
+function buildForms() {
+  const f = S.freqs;
+  // audiograma
+  let h = "<tr><th></th>" + f.map(x => `<th>${fLabel(x)}</th>`).join("") + "</tr>";
+  for (const e of EARS)
+    h += `<tr><th class="${e[0]}">${EAR_NAME[e]}</th>` + f.map((_, i) => {
+      const v = S.audiogram[e][i];
+      return `<td><input id="ag_${e}_${i}" value="${v === null ? "" : v}"></td>`;
+    }).join("") + "</tr>";
+  $("agTbl").innerHTML = h;
+  // ajuste fino
+  h = "<tr><th>dB</th>" + f.map(x => `<th>${fLabel(x)}</th>`).join("") + "</tr>";
+  for (const e of EARS)
+    h += `<tr><th class="${e[0]}">${EAR_NAME[e]}</th>` + f.map((_, i) =>
+      `<td><input type="number" step="1" id="ft_${e}_${i}" value="${S.settings.fine_tune_db[e][i]}"></td>`).join("") + "</tr>";
+  $("ftTbl").innerHTML = h;
+  // configurações
+  $("setGrid").innerHTML = SETTINGS.map(([k, l, st]) =>
+    `<div><label>${l}</label><input type="number" step="${st}" id="s_${k}" value="${S.settings[k]}"></div>`).join("") +
+    `<div><label>Tipo de fone</label><select id="s_transducer"><option value="0">Arco (supra-aural)</option><option value="1">Intra-auricular (inserção)</option></select></div>` +
+    `<div><label>LED junto com o tom</label><select id="s_led_during_tone"><option value="false">Não (autoteste)</option><option value="true">Sim (operador)</option></select></div>`;
+  $("s_transducer").value = S.settings.transducer;
+  $("s_led_during_tone").value = String(S.settings.led_during_tone);
+  // tom de teste
+  $("tBand").innerHTML = f.map((x, i) => `<option value="${i}" ${i === 2 ? "selected" : ""}>${x} Hz</option>`).join("");
+}
+
+function renderStatus() {
+  $("batt").textContent = `bateria ${S.battery.voltage.toFixed(2)} V (${S.battery.percent}%)`;
+  const e = S.engine;
+  $("dsp").textContent = `DSP ${e.proc_us_avg}/${e.proc_us_max} µs de ${Math.round(e.block_us)} µs`;
+  $("mic").textContent = `mic ${e.mic_rms_dbfs[0].toFixed(0)} / ${e.mic_rms_dbfs[1].toFixed(0)} dBFS`;
+  $("muteBtn").textContent = S.muted ? "Ligar som" : "Mudo";
+  const a = S.audiometry;
+  let t;
+  if (a.running) {
+    t = `${a.calibration ? "Calibração" : "Audiometria"} em andamento — ouvido ${EAR_NAME[a.ear].toLowerCase()}, ${a.freq} Hz, ${a.level_hl} dB HL · passo ${a.step + 1}/${a.total_steps} · falsos positivos: ${a.false_positives}`;
+  } else if (a.total_steps) {
+    t = a.last_completed ? `Concluída. Falsos positivos: ${a.false_positives}.` : "Interrompida; nada foi salvo.";
+    for (const e of EARS) {
+      const d = a.retest_diff[e];
+      if (d > 5) t += ` Reteste de 1 kHz no ouvido ${EAR_NAME[e].toLowerCase()} diferiu ${d} dB — resultado pouco confiável, repita.`;
+    }
+  } else t = "Parada.";
+  $("audStatus").textContent = t;
+  $("audBar").style.width = a.total_steps ? (100 * a.step / a.total_steps) + "%" : "0";
+  let c = "<tr><th>Offset (dB)</th>" + S.freqs.map(x => `<th>${fLabel(x)}</th>`).join("") + "</tr>";
+  for (const e of EARS)
+    c += `<tr><th class="${e[0]}">${EAR_NAME[e]}</th>` + S.settings.cal_offset_db[e].map(v => `<td>${v}</td>`).join("") + "</tr>";
+  $("calTbl").innerHTML = c;
+}
+
+// ---- gráficos ----
+const X0 = 50, X1 = 500;
+const fx = f => X0 + (Math.log2(f / 125) / Math.log2(16000 / 125)) * (X1 - X0);
+
+function axes(y0, y1, ymin, ymax, step, invert, unit) {
+  const fy = v => invert ? y0 + (v - ymin) / (ymax - ymin) * (y1 - y0) : y1 - (v - ymin) / (ymax - ymin) * (y1 - y0);
+  let s = "";
+  for (let v = ymin; v <= ymax; v += step)
+    s += `<line x1="${X0}" x2="${X1}" y1="${fy(v)}" y2="${fy(v)}" stroke="#e5e8ee"/><text x="${X0 - 6}" y="${fy(v) + 4}" font-size="10" text-anchor="end" fill="#667085">${v}</text>`;
+  for (const f of [250, 500, 1000, 2000, 4000, 8000])
+    s += `<line x1="${fx(f)}" x2="${fx(f)}" y1="${y0}" y2="${y1}" stroke="#e5e8ee"/><text x="${fx(f)}" y="${y1 + 14}" font-size="10" text-anchor="middle" fill="#667085">${fLabel(f)}</text>`;
+  s += `<text x="12" y="${(y0 + y1) / 2}" font-size="10" fill="#667085" transform="rotate(-90 12 ${(y0 + y1) / 2})" text-anchor="middle">${unit}</text>`;
+  return {s, fy};
+}
+
+function drawAudiogram() {
+  const {s, fy} = axes(10, 300, -10, 120, 10, true, "dB HL");
+  let out = s;
+  const col = {right: "var(--r)", left: "var(--l)"};
+  for (const e of EARS) {
+    const pts = [];
+    S.freqs.forEach((f, i) => {
+      const v = S.audiogram[e][i];
+      if (v === null) return;
+      const x = fx(f) + (e === "left" ? 3 : -3);
+      if (v === "NR") {
+        const y = fy(S.settings.max_test_hl);
+        out += `<text x="${x}" y="${y + 18}" font-size="16" text-anchor="middle" fill="${col[e]}">↓</text>`;
+        return;
+      }
+      const y = fy(v);
+      pts.push(`${x},${y}`);
+      out += e === "right"
+        ? `<circle cx="${x}" cy="${y}" r="6" fill="none" stroke="${col[e]}" stroke-width="2"/>`
+        : `<path d="M${x - 5} ${y - 5}L${x + 5} ${y + 5}M${x + 5} ${y - 5}L${x - 5} ${y + 5}" stroke="${col[e]}" stroke-width="2"/>`;
+    });
+    if (pts.length > 1)
+      out = `<polyline points="${pts.join(" ")}" fill="none" stroke="${col[e]}" stroke-width="1.5" ${e === "left" ? 'stroke-dasharray="5 3"' : ""}/>` + out;
+  }
+  $("agSvg").innerHTML = out;
+}
+
+function drawGain() {
+  const {s, fy} = axes(10, 230, -10, 50, 10, false, "ganho (dB)");
+  let out = s;
+  const col = {right: "var(--r)", left: "var(--l)"};
+  for (const e of EARS) {
+    const r = S.response;
+    const pts = r.freqs.map((f, i) => `${fx(f)},${fy(Math.max(-10, Math.min(50, r[e][i])))}`).join(" ");
+    out += `<polyline points="${pts}" fill="none" stroke="${col[e]}" stroke-width="1.5"/>`;
+    S.freqs.forEach((f, i) => out += `<circle cx="${fx(f)}" cy="${fy(S.targets[e][i])}" r="3.5" fill="${col[e]}"/>`);
+  }
+  $("gainSvg").innerHTML = out;
+}
+
+async function refresh(full) {
+  S = await api("/api/state");
+  if (full) buildForms();
+  renderStatus();
+  drawAudiogram();
+  drawGain();
+}
+
+function readThr(v) {
+  v = v.trim().toUpperCase();
+  if (v === "") return null;
+  if (v === "NR") return "NR";
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+$("agSave").onclick = async () => {
+  const body = {};
+  for (const e of EARS) body[e] = S.freqs.map((_, i) => readThr($(`ag_${e}_${i}`).value));
+  await api("/api/audiogram", body);
+  refresh(true);
+};
+$("ftSave").onclick = async () => {
+  const ft = {};
+  for (const e of EARS) ft[e] = S.freqs.map((_, i) => Number($(`ft_${e}_${i}`).value) || 0);
+  await api("/api/settings", {fine_tune_db: ft});
+  refresh(true);
+};
+$("setSave").onclick = async () => {
+  const body = {};
+  for (const [k] of SETTINGS) body[k] = Number($("s_" + k).value);
+  body.transducer = Number($("s_transducer").value);
+  body.led_during_tone = $("s_led_during_tone").value === "true";
+  await api("/api/settings", body);
+  refresh(true);
+};
+$("muteBtn").onclick = async () => { await api("/api/settings", {muted: !S.muted}); refresh(false); };
+$("audStart").onclick = () => api("/api/audiometry", {action: "start"}).then(() => refresh(false));
+$("audCal").onclick = () => {
+  if (confirm("Calibração biológica: a pessoa testada deve ter audição normal. O resultado será usado como 0 dB HL para este fone. Continuar?"))
+    api("/api/audiometry", {action: "start", calibration: true}).then(() => refresh(false));
+};
+$("audStop").onclick = () => api("/api/audiometry", {action: "stop"}).then(() => refresh(true));
+$("tPlay").onclick = () => api("/api/tone", {ear: $("tEar").value, band: Number($("tBand").value), hl: Number($("tHl").value)});
+$("tRef").onclick = () => api("/api/tone", {ear: $("tEar").value, freq: 1000, dbfs: -20});
+$("calReset").onclick = async () => { if (confirm("Zerar a calibração biológica?")) { await api("/api/calibration/reset", {}); refresh(true); } };
+$("restart").onclick = () => api("/api/restart", {});
+
+let wasRunning = false;
+async function poll() {
+  try {
+    await refresh(false);
+    const running = S.audiometry.running;
+    if (wasRunning && !running) refresh(true); // atualiza formulários com o novo audiograma
+    wasRunning = running;
+  } catch (e) {}
+  setTimeout(poll, S && S.audiometry.running ? 1500 : 5000);
+}
+refresh(true).then(poll);
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+.pio/
+.vscode/
+build/
+sdkconfig
+sdkconfig.*
+!sdkconfig.defaults
+
+# Local-only material, kept out of the public repository
+/pcb/
+/ideia.md
+/image.png
+/WhatsApp Image *.jpeg
